@@ -76,7 +76,7 @@
     function proxyUrl(targetUrl) {
         const proxyBase = getProxyUrl();
         if (!proxyBase) return targetUrl;
-        return proxyBase + targetUrl;
+        return proxyBase + encodeURIComponent(targetUrl);
     }
 
     const NOVELFIRE_URL = "https://novelfire.net";

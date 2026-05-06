@@ -78,7 +78,7 @@
     // Helper function to proxy a URL
     function proxyUrl(targetUrl) {
         if (!PROXY_BASE) return targetUrl;
-        return PROXY_BASE + targetUrl;
+        return PROXY_BASE + encodeURIComponent(targetUrl);
     }
 
     // --- Private Utility Functions ---

@@ -78,7 +78,7 @@
     // Helper function to proxy a URL
     function proxyUrl(targetUrl) {
         if (!PROXY_BASE) return targetUrl;
-        return PROXY_BASE + targetUrl;
+        return PROXY_BASE + encodeURIComponent(targetUrl);
     }
 
     // --- Private Utility Functions ---
@@ -334,25 +334,6 @@
         }
     }
 
-    // --- Create and Register The Source ---
-
-    const novelBinSource = {
-        id: "novelbin",
-        name: "NovelBin",
-        autoMatch,
-        manualSearch,
-        getChapters,
-        getChapterContent
-    };
-
-    if (window.novelPluginRegistry) {
-        window.novelPluginRegistry.registerSource(novelBinSource);
-        console.log('[novel-plugin] NovelBinSource registered.');
-    } else {
-        console.error('[novel-plugin] NovelBinSource: Registry not found!');
-    }
-
-})();
     // --- Create and Register The Source ---
 
     const novelBinSource = {
