@@ -177,28 +177,41 @@
             // Log all files in ZIP
             const allFiles = Object.keys(zip.files);
             console.log('[novel-plugin] All files in ZIP:', allFiles.slice(0, 20), '...');
+            console.log('[novel-plugin] Total files in ZIP:', allFiles.length);
             
             // Log available HTML files
             const htmlFiles = allFiles.filter(f => f.includes('.xhtml') || f.includes('.html'));
-            console.log('[novel-plugin] Available HTML files:', htmlFiles.slice(0, 10), '...');
+            console.log('[novel-plugin] Available HTML files:', htmlFiles.slice(0, 15), '...');
+            console.log('[novel-plugin] Total HTML files:', htmlFiles.length);
             
             console.log('[novel-plugin] Looking for file:', chapterUrl);
-            const contentXml = await zip.file(chapterUrl)?.async('text');
+            let contentXml = await zip.file(chapterUrl)?.async('text');
             
             if (!contentXml) {
                 console.error('[novel-plugin] Could not find file:', chapterUrl);
-                // Try to find a matching file
+                // Try to find a matching file by filename only
                 const fileName = chapterUrl.split('/').pop();
                 console.log('[novel-plugin] Trying to find file by name:', fileName);
                 const matchingFile = htmlFiles.find(f => f.endsWith(fileName));
                 if (matchingFile) {
                     console.log('[novel-plugin] Found matching file:', matchingFile);
-                    const fallbackXml = await zip.file(matchingFile)?.async('text');
-                    if (fallbackXml) {
-                        return processChapterContent(fallbackXml, zip, chapterUrl);
+                    contentXml = await zip.file(matchingFile)?.async('text');
+                    if (contentXml) {
+                        return processChapterContent(contentXml, zip, matchingFile);
                     }
                 }
-                throw new Error('Could not find chapter content');
+                
+                // If still not found, try to find by partial match
+                const partialMatch = htmlFiles.find(f => f.includes(fileName.replace('.xhtml', '')));
+                if (partialMatch) {
+                    console.log('[novel-plugin] Found partial match:', partialMatch);
+                    contentXml = await zip.file(partialMatch)?.async('text');
+                    if (contentXml) {
+                        return processChapterContent(contentXml, zip, partialMatch);
+                    }
+                }
+                
+                throw new Error('Could not find chapter content. Looking for: ' + chapterUrl);
             }
             
             return processChapterContent(contentXml, zip, chapterUrl);
