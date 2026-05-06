@@ -249,7 +249,17 @@
                 // Resolve relative path
                 let imagePath = src;
                 if (!src.startsWith('/')) {
-                    imagePath = chapterDir + src;
+                    // Normalize path (resolve ../)
+                    const parts = (chapterDir + src).split('/');
+                    const resolvedParts = [];
+                    for (const part of parts) {
+                        if (part === '..') {
+                            resolvedParts.pop();
+                        } else if (part && part !== '.') {
+                            resolvedParts.push(part);
+                        }
+                    }
+                    imagePath = resolvedParts.join('/');
                 }
                 
                 console.log('[novel-plugin] Loading image:', imagePath);
