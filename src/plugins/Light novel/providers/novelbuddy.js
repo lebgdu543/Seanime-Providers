@@ -194,7 +194,14 @@
             // Remove translation selector and other UI elements
             contentElement.querySelectorAll('select, .mb-6').forEach(el => el.remove());
             
-            return contentElement.innerHTML;
+            // Remove obfuscated freewebnovel.com spam
+            let contentHtml = contentElement.innerHTML;
+            contentHtml = contentHtml.replace(/ƒ𝗿e𝘦𝚠𝗲𝚋n𝚘ν𝙚𝗹\.𝑐o𝙢/g, '');
+            
+            // Remove repeated ※ pattern
+            contentHtml = contentHtml.replace(/※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※/g, '');
+            
+            return contentHtml;
         } catch (err) {
             console.error("[novel-plugin] NovelBuddy ChapterContent Error:", err);
             return "<p>Error loading chapter content.</p>";

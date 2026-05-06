@@ -270,6 +270,9 @@
                 cleanHtml = paragraphs.map(p => `<p>${p.trim()}</p>`).join('');
             }
 
+            // Remove repeated ※ pattern
+            cleanHtml = cleanHtml.replace(/※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※\s※/g, '');
+
             return cleanHtml;
         } catch (err) {
             console.error("[novel-plugin] NovelFire ChapterContent Error:", err);
