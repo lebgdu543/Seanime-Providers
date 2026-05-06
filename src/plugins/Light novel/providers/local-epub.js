@@ -237,23 +237,35 @@
             throw new Error('Could not find body content');
         }
         
+        // Get the chapter directory for resolving image paths
+        const chapterDir = chapterUrl.substring(0, chapterUrl.lastIndexOf('/') + 1);
+        console.log('[novel-plugin] Chapter directory:', chapterDir);
+        
         // Process images
         const images = body.querySelectorAll('img');
         for (const img of images) {
             const src = img.getAttribute('src');
-            if (src && !src.startsWith('http')) {
+            if (src && !src.startsWith('http') && !src.startsWith('data:')) {
                 // Resolve relative path
-                const chapterDir = chapterUrl.substring(0, chapterUrl.lastIndexOf('/') + 1);
-                const imagePath = chapterDir + src;
+                let imagePath = src;
+                if (!src.startsWith('/')) {
+                    imagePath = chapterDir + src;
+                }
                 
+                console.log('[novel-plugin] Loading image:', imagePath);
                 try {
                     const imageData = await zip.file(imagePath)?.async('base64');
                     if (imageData) {
                         const mimeType = getMimeType(src);
                         img.setAttribute('src', `data:${mimeType};base64,${imageData}`);
+                        console.log('[novel-plugin] Image loaded successfully');
+                    } else {
+                        console.warn('[novel-plugin] Image file not found in ZIP:', imagePath);
+                        img.remove(); // Remove broken image
                     }
                 } catch (e) {
-                    console.warn('[novel-plugin] Could not load image:', imagePath);
+                    console.warn('[novel-plugin] Could not load image:', imagePath, e);
+                    img.remove(); // Remove broken image
                 }
             }
         }
