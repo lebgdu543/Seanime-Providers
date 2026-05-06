@@ -73,13 +73,16 @@
     // Parse EPUB file
     async function parseEpub(fileData) {
         try {
+            console.log('[novel-plugin] Starting EPUB parsing...');
             const zip = await JSZip.loadAsync(fileData);
+            console.log('[novel-plugin] EPUB loaded, files:', Object.keys(zip.files).length);
             
             // Find and parse container.xml
             const containerXml = await zip.file('META-INF/container.xml')?.async('text');
             if (!containerXml) {
                 throw new Error('Invalid EPUB: Missing META-INF/container.xml');
             }
+            console.log('[novel-plugin] container.xml found');
             
             // Extract OPF file path from container.xml
             const parser = new DOMParser();
@@ -88,12 +91,14 @@
             if (!opfPath) {
                 throw new Error('Invalid EPUB: Could not find OPF file path');
             }
+            console.log('[novel-plugin] OPF path:', opfPath);
             
             // Parse OPF file
             const opfXml = await zip.file(opfPath)?.async('text');
             if (!opfXml) {
                 throw new Error('Invalid EPUB: Could not find OPF file');
             }
+            console.log('[novel-plugin] OPF file loaded');
             
             const opfDoc = parser.parseFromString(opfXml, 'text/xml');
             
@@ -101,9 +106,11 @@
             const metadata = opfDoc.querySelector('metadata');
             const title = metadata?.querySelector('title')?.textContent || 'Unknown Title';
             const author = metadata?.querySelector('creator')?.textContent || 'Unknown Author';
+            console.log('[novel-plugin] Title:', title, 'Author:', author);
             
             // Extract spine (reading order)
             const spineItems = Array.from(opfDoc.querySelectorAll('spine itemref')).map(item => item.getAttribute('idref'));
+            console.log('[novel-plugin] Spine items:', spineItems.length);
             
             // Extract manifest (file paths)
             const manifest = {};
@@ -113,24 +120,39 @@
                     mediaType: item.getAttribute('media-type')
                 };
             });
+            console.log('[novel-plugin] Manifest items:', Object.keys(manifest).length);
             
             // Build chapter list from spine
             const chapters = [];
             for (let i = 0; i < spineItems.length; i++) {
                 const itemId = spineItems[i];
                 const item = manifest[itemId];
-                if (item && item.mediaType === 'application/xhtml+xml') {
-                    const href = item.href;
-                    // Resolve relative path to OPF file
-                    const opfDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
-                    const fullPath = opfDir + href;
-                    
-                    chapters.push({
-                        title: `Chapter ${i + 1}`,
-                        url: fullPath,
-                        index: i
-                    });
+                if (item) {
+                    console.log(`[novel-plugin] Processing spine item ${i}: ${itemId}, mediaType: ${item.mediaType}`);
+                    // Accept both xhtml+xml and html+xml media types
+                    if (item.mediaType === 'application/xhtml+xml' || 
+                        item.mediaType === 'application/x-html+xml' ||
+                        item.mediaType === 'text/html') {
+                        const href = item.href;
+                        // Resolve relative path to OPF file
+                        const opfDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
+                        const fullPath = opfDir + href;
+                        
+                        chapters.push({
+                            title: `Chapter ${i + 1}`,
+                            url: fullPath,
+                            index: i
+                        });
+                    }
+                } else {
+                    console.warn(`[novel-plugin] Spine item ${itemId} not found in manifest`);
                 }
+            }
+            
+            console.log('[novel-plugin] Total chapters found:', chapters.length);
+            
+            if (chapters.length === 0) {
+                throw new Error('No chapters found in EPUB. The EPUB may use a different structure.');
             }
             
             return {
