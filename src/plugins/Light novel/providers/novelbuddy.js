@@ -79,7 +79,7 @@
                 if (image.startsWith("//")) { 
                     image = `https:${image}`; 
                 } else if (image.startsWith("/")) {
-                    image = `${NOVELBUDDY_URL}${image}`;
+                    image = `${NOVELBUDDY_BASE_URL}${image}`;
                 }
                 const latestChapter = item.querySelector('.latest-chapter')?.textContent?.trim() || "No Chapter";
               
@@ -103,7 +103,8 @@
      * @returns {Promise<Chapter[]>}
      */
     async function getChapters(novelUrl) {
-        const url = `${NOVELBUDDY_URL}${novelUrl}`;
+        const targetUrl = `${NOVELBUDDY_BASE_URL}${novelUrl}`;
+        const url = proxyUrl(targetUrl);
         try {
             const res = await fetch(url);
             const html = await res.text();
@@ -112,8 +113,8 @@
                 throw new Error("Could not find bookId on novel page.");
             }
             const bookId = bookIdMatch[1];
-            const chapterApiUrl = `${NOVELBUDDY_URL}/api/manga/${bookId}/chapters?source=detail`;
-            const chapterRes = await fetch(chapterApiUrl);
+            const chapterApiUrl = `${NOVELBUDDY_BASE_URL}/api/manga/${bookId}/chapters?source=detail`;
+            const chapterRes = await fetch(proxyUrl(chapterApiUrl));
             const chapterHtml = await chapterRes.text();
             const chapters = [];
             
@@ -143,7 +144,8 @@
      * @returns {Promise<string>}
      */
     async function getChapterContent(chapterUrl) {
-        const url = `${NOVELBUDDY_URL}${chapterUrl}`;
+        const targetUrl = `${NOVELBUDDY_BASE_URL}${chapterUrl}`;
+        const url = proxyUrl(targetUrl);
         try {
             const res = await fetch(url);
             const html = await res.text();
@@ -257,3 +259,4 @@
     }
 
 })();
+

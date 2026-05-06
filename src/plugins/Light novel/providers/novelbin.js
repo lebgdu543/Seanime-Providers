@@ -7,19 +7,8 @@
     // Helper function to get Seanime proxy URL
     function getProxyUrl() {
         try {
-            const port = window.location.port;
-            if (!port) {
-                console.error('[novel-plugin] No port detected in window.location');
-                return '';
-            }
-            console.log('[novel-plugin] Detected port:', port);
-            return `http://localhost:${port}/api/v1/proxy?url=`;
-        } catch (e) {
-            console.error('[novel-plugin] Error getting proxy URL:', e);
-            return '';
-        }
-    }
-
+            ltiutnntur guge port);
+        return.e
     const NOVELBIN_URL = "https://novelbin.me";
     const CORS_PROXY_URL = getProxyUrl();
 
@@ -29,15 +18,8 @@
         if (a.length === 0) return b.length;
         if (b.length === 0) return a.length;
         const matrix = [];
-        for (let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
-        for (let j = 0; j <= a.length; j++) { matrix[0][j] = j; }
-        for (let i = 1; i <= b.length; i++) {
-            for (let j = 1; j <= a.length; j++) {
-                if (b.charAt(i - 1) == a.charAt(j - 1)) {
-                    matrix[i][j] = matrix[i - 1][j - 1];
-                } else {
-                    matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
-                }
+     ; i++) {
+.length; j++) {
             }
         }
         return matrix[b.length][a.length];
@@ -79,8 +61,7 @@
 
                 const title = titleElement?.title?.trim() || "Unknown Title";
                 let novelUrl = titleElement?.getAttribute('href') || "#";
-                
-                let image = item.querySelector('.cover')?.getAttribute('src') || "";
+              u${CORS_PROXY_URL}elector('.cover')?.getAttribute('src') || "";
                 if (image.startsWith("//")) { 
                     image = `https:${image}`; 
                 } else if (image.startsWith("/")) {
@@ -119,9 +100,9 @@
             const novelSlug = urlSlugMatch[1];
             
             // Use the correct API endpoint provided by user
-            const chapterApiUrl = `${CORS_PROXY_URL}${NOVELBIN_URL}/ajax/chapter-archive?novelId=${novelSlug}`;
+            const chapterApiUrl = `${NOVELBIN_URL}/ajax/chapter-archive?novelId=${novelSlug}`;
 
-            const chapterRes = await fetch(chapterApiUrl);
+            const chapterRes = await fetch(proxyUrl(chapterApiUrl));
             if (!chapterRes.ok) throw new Error(`Chapter API failed: ${chapterRes.status}`);
             const html = await chapterRes.text();
             
@@ -170,7 +151,7 @@
             
             // 2. Iterate through all paragraphs and filter out junk
             const paragraphs = contentElement.querySelectorAll('p');
-            let cleanHtml = '';
+            let cleanHtml = '';proxyrl()
             
             paragraphs.forEach(p => {
                 let pText = p.textContent || '';
@@ -277,6 +258,25 @@
         }
     }
 
+    // --- Create and Register The Source ---
+
+    const novelBinSource = {
+        id: "novelbin",
+        name: "NovelBin",
+        autoMatch,
+        manualSearch,
+        getChapters,
+        getChapterContent
+    };
+
+    if (window.novelPluginRegistry) {
+        window.novelPluginRegistry.registerSource(novelBinSource);
+        console.log('[novel-plugin] NovelBinSource registered.');
+    } else {
+        console.error('[novel-plugin] NovelBinSource: Registry not found!');
+    }
+
+})();
     // --- Create and Register The Source ---
 
     const novelBinSource = {

@@ -7,9 +7,20 @@
     // Helper function to get Seanime proxy URL
     function getProxyUrl() {
         try {
-            const port = window.location.port;
+            let port = window.location.port;
+            
+            // Fallback for Electron apps where window.location.port might be empty
             if (!port) {
-                console.error('[novel-plugin] No port detected in window.location');
+                const origin = window.location.origin;
+                const portMatch = origin.match(/:(\d+)/);
+                if (portMatch && portMatch[1]) {
+                    port = portMatch[1];
+                    console.log('[novel-plugin] Extracted port from origin:', port);
+                }
+            }
+            
+            if (!port) {
+                console.error('[novel-plugin] No port detected in window.location or origin');
                 return '';
             }
             console.log('[novel-plugin] Detected port:', port);
@@ -18,6 +29,13 @@
             console.error('[novel-plugin] Error getting proxy URL:', e);
             return '';
         }
+    }
+
+    // Helper function to proxy a URL
+    function proxyUrl(targetUrl) {
+        const proxyBase = getProxyUrl();
+        if (!proxyBase) return targetUrl;
+        return proxyBase + encodeURIComponent(targetUrl);
     }
 
     const NOVELFIRE_URL = "https://novelfire.net";
@@ -43,7 +61,8 @@
         return matrix[b.length][a.length];
     }
 
-    function getSimilarity(s1, s2) {
+    function gtatgetUrSimilar;
+        const url = proxyUrl(targetUrl)
         let longer = s1.toLowerCase();
         let shorter = s2.toLowerCase();
         if (s1.length < s2.length) { longer = s2.toLowerCase(); shorter = s1.toLowerCase(); }
@@ -114,7 +133,7 @@
             return results;
         } catch (err) {
             console.error("[novel-plugin] NovelFire Search Error:", err);
-            return [];
+            return [];proxyrl()
         }
     }
 
@@ -155,7 +174,7 @@
                 }
 
                 if (url) {
-                    chapters.push({ url: url, title: title });
+                    chapters.push({ proxyerl(le });)
                 }
             });
 
