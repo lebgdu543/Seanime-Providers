@@ -171,47 +171,74 @@
     // Get chapter content from EPUB
     async function getChapterContentFromEpub(epubData, chapterUrl) {
         try {
+            console.log('[novel-plugin] Getting chapter content for:', chapterUrl);
             const zip = await JSZip.loadAsync(epubData.fileData);
+            
+            // Log all files in ZIP
+            const allFiles = Object.keys(zip.files);
+            console.log('[novel-plugin] All files in ZIP:', allFiles.slice(0, 20), '...');
+            
+            // Log available HTML files
+            const htmlFiles = allFiles.filter(f => f.includes('.xhtml') || f.includes('.html'));
+            console.log('[novel-plugin] Available HTML files:', htmlFiles.slice(0, 10), '...');
+            
+            console.log('[novel-plugin] Looking for file:', chapterUrl);
             const contentXml = await zip.file(chapterUrl)?.async('text');
             
             if (!contentXml) {
+                console.error('[novel-plugin] Could not find file:', chapterUrl);
+                // Try to find a matching file
+                const fileName = chapterUrl.split('/').pop();
+                console.log('[novel-plugin] Trying to find file by name:', fileName);
+                const matchingFile = htmlFiles.find(f => f.endsWith(fileName));
+                if (matchingFile) {
+                    console.log('[novel-plugin] Found matching file:', matchingFile);
+                    const fallbackXml = await zip.file(matchingFile)?.async('text');
+                    if (fallbackXml) {
+                        return processChapterContent(fallbackXml, zip, chapterUrl);
+                    }
+                }
                 throw new Error('Could not find chapter content');
             }
             
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(contentXml, 'text/html');
-            const body = doc.querySelector('body');
-            
-            if (!body) {
-                throw new Error('Could not find body content');
-            }
-            
-            // Process images
-            const images = body.querySelectorAll('img');
-            for (const img of images) {
-                const src = img.getAttribute('src');
-                if (src && !src.startsWith('http')) {
-                    // Resolve relative path
-                    const chapterDir = chapterUrl.substring(0, chapterUrl.lastIndexOf('/') + 1);
-                    const imagePath = chapterDir + src;
-                    
-                    try {
-                        const imageData = await zip.file(imagePath)?.async('base64');
-                        if (imageData) {
-                            const mimeType = getMimeType(src);
-                            img.setAttribute('src', `data:${mimeType};base64,${imageData}`);
-                        }
-                    } catch (e) {
-                        console.warn('[novel-plugin] Could not load image:', imagePath);
-                    }
-                }
-            }
-            
-            return body.innerHTML;
+            return processChapterContent(contentXml, zip, chapterUrl);
         } catch (error) {
             console.error('[novel-plugin] Chapter content extraction error:', error);
             throw error;
         }
+    }
+
+    async function processChapterContent(contentXml, zip, chapterUrl) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(contentXml, 'text/html');
+        const body = doc.querySelector('body');
+        
+        if (!body) {
+            throw new Error('Could not find body content');
+        }
+        
+        // Process images
+        const images = body.querySelectorAll('img');
+        for (const img of images) {
+            const src = img.getAttribute('src');
+            if (src && !src.startsWith('http')) {
+                // Resolve relative path
+                const chapterDir = chapterUrl.substring(0, chapterUrl.lastIndexOf('/') + 1);
+                const imagePath = chapterDir + src;
+                
+                try {
+                    const imageData = await zip.file(imagePath)?.async('base64');
+                    if (imageData) {
+                        const mimeType = getMimeType(src);
+                        img.setAttribute('src', `data:${mimeType};base64,${imageData}`);
+                    }
+                } catch (e) {
+                    console.warn('[novel-plugin] Could not load image:', imagePath);
+                }
+            }
+        }
+        
+        return body.innerHTML;
     }
 
     function getMimeType(filename) {
