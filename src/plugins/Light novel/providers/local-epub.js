@@ -124,6 +124,8 @@
             
             // Build chapter list from spine
             const chapters = [];
+            const allZipFiles = Object.keys(zip.files);
+            
             for (let i = 0; i < spineItems.length; i++) {
                 const itemId = spineItems[i];
                 const item = manifest[itemId];
@@ -138,11 +140,16 @@
                         const opfDir = opfPath.substring(0, opfPath.lastIndexOf('/') + 1);
                         const fullPath = opfDir + href;
                         
-                        chapters.push({
-                            title: `Chapter ${i + 1}`,
-                            url: fullPath,
-                            index: i
-                        });
+                        // Only add if the file actually exists in the ZIP
+                        if (allZipFiles.includes(fullPath)) {
+                            chapters.push({
+                                title: `Chapter ${chapters.length + 1}`,
+                                url: fullPath,
+                                index: chapters.length
+                            });
+                        } else {
+                            console.warn(`[novel-plugin] Skipping non-existent file: ${fullPath}`);
+                        }
                     }
                 } else {
                     console.warn(`[novel-plugin] Spine item ${itemId} not found in manifest`);
