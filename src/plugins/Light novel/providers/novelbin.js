@@ -73,7 +73,13 @@
     }
 
     const NOVELBIN_URL = "https://novelbin.me";
-    const CORS_PROXY_URL = getProxyUrl();
+    const PROXY_BASE = getProxyUrl();
+
+    // Helper function to proxy a URL
+    function proxyUrl(targetUrl) {
+        if (!PROXY_BASE) return targetUrl;
+        return PROXY_BASE + targetUrl;
+    }
 
     // --- Private Utility Functions ---
 
@@ -113,7 +119,7 @@
      * @returns {Promise<SearchResult[]>}
      */
     async function manualSearch(query) {
-        const url = `${CORS_PROXY_URL}${NOVELBIN_URL}/search?keyword=${encodeURIComponent(query)}`;
+        const url = proxyUrl(`${NOVELBIN_URL}/search?keyword=${encodeURIComponent(query)}`);
         try {
             const res = await fetch(url);
             if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
@@ -202,7 +208,7 @@
      */
     async function getChapterContent(chapterUrl) {
         try {
-            const res = await fetch(`${CORS_PROXY_URL}${chapterUrl}`);
+            const res = await fetch(proxyUrl(chapterUrl));
             if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
             const html = await res.text();
             const parser = new DOMParser();
@@ -221,7 +227,7 @@
             
             // 2. Iterate through all paragraphs and filter out junk
             const paragraphs = contentElement.querySelectorAll('p');
-            let cleanHtml = '';proxyrl()
+            let cleanHtml = '';
             
             paragraphs.forEach(p => {
                 let pText = p.textContent || '';

@@ -73,8 +73,13 @@
     }
 
     const NOVELBUDDY_BASE_URL = "https://novelbuddy.com";
-    const PROXY_URL = getProxyUrl();
-    const NOVELBUDDY_URL = PROXY_URL ? `${PROXY_URL}${NOVELBUDDY_BASE_URL}` : NOVELBUDDY_BASE_URL;
+    const PROXY_BASE = getProxyUrl();
+
+    // Helper function to proxy a URL
+    function proxyUrl(targetUrl) {
+        if (!PROXY_BASE) return targetUrl;
+        return PROXY_BASE + targetUrl;
+    }
 
     // --- Private Utility Functions ---
 
@@ -109,7 +114,7 @@
     // --- Interface Implementation ---
 
     /**
-     * Searches NovelBuddy for a query
+     * Searches NoveproxyUrl(lBuddy for a _BASEquery)
      * @param {string} query 
      * @returns {Promise<SearchResult[]>}
      */

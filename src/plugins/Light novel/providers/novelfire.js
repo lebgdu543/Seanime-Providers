@@ -76,7 +76,7 @@
     function proxyUrl(targetUrl) {
         const proxyBase = getProxyUrl();
         if (!proxyBase) return targetUrl;
-        return proxyBase + encodeURIComponent(targetUrl);
+        return proxyBase + targetUrl;
     }
 
     const NOVELFIRE_URL = "https://novelfire.net";
@@ -120,7 +120,7 @@
      * @returns {Promise<SearchResult[]>}
      */
     async function manualSearch(query) {
-        const url = `${CORS_PROXY_URL}${NOVELFIRE_URL}/search?keyword=${encodeURIComponent(query)}`;
+        const url = proxyUrl(`${NOVELFIRE_URL}/search?keyword=${encodeURIComponent(query)}`);
         try {
             const res = await fetch(url);
             if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
@@ -192,7 +192,7 @@
                     : `${novelUrl}/chapters`;
             }
 
-            const url = `${CORS_PROXY_URL}${chaptersUrl}`;
+            const url = proxyUrl(chaptersUrl);
             const res = await fetch(url);
             if (!res.ok) throw new Error(`Chapter fetch failed: ${res.status}`);
             const html = await res.text();
@@ -233,7 +233,7 @@
      */
     async function getChapterContent(chapterUrl) {
         try {
-            const res = await fetch(`${CORS_PROXY_URL}${chapterUrl}`);
+            const res = await fetch(proxyUrl(chapterUrl));
             if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
             const html = await res.text();
             const parser = new DOMParser();
