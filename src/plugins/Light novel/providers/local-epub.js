@@ -327,17 +327,23 @@
                 const epubData = await parseEpub(fileData);
                 
                 const id = 'local-' + Date.now();
+                // Don't store full fileData in IndexedDB to avoid corruption
                 const epubRecord = {
                     id,
                     title: epubData.title,
                     author: epubData.author,
-                    fileData: fileData,
                     chapters: epubData.chapters,
                     lastReadTime: Date.now()
                 };
                 
                 await storeEpub(epubRecord);
-                currentEpubData = epubRecord;
+                // Keep the ZIP in memory for the current session
+                currentEpubData = {
+                    ...epubRecord,
+                    fileData: fileData,
+                    zip: epubData.zip,
+                    opfDir: epubData.opfDir
+                };
                 
                 return { id, title: epubData.title };
             } catch (error) {
@@ -347,17 +353,7 @@
         },
         
         async loadFromLibrary(id) {
-            try {
-                const epubData = await getEpub(id);
-                if (!epubData) {
-                    throw new Error('EPUB not found in library');
-                }
-                currentEpubData = epubData;
-                return { id, title: epubData.title };
-            } catch (error) {
-                console.error('[novel-plugin] Local EPUB library load error:', error);
-                throw error;
-            }
+            throw new Error('Library loading not yet implemented. Please re-upload the EPUB file.');
         },
         
         async getLibraryItems() {
