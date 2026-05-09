@@ -103,6 +103,12 @@ Or
 
 * [Dantotsu](https://discord.gg/MSJvfJzS7R) *(The Anilist activity plugin is inspired by Dantotsu's stories feature.)*
 
+### Contributors
+
+| [<img src="https://avatars.githubusercontent.com/u/64171580?v=4" width="64">](https://github.com/Ari-03) |
+|:---:|
+| [Ari-03](https://github.com/Ari-03) |
+
 ---
 
 ### Extra info
