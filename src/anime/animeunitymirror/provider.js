@@ -6,7 +6,7 @@ class Provider {
 
   getSettings() {
     return {
-      episodeServers: ["Default"],
+      episodeServers: ["AnimeUnity"],
       supportsDub: false,
     };
   }
@@ -97,14 +97,24 @@ class Provider {
     });
     const html = await res.text();
 
-    // Match <source src="..." type="video/mp4"> in either attribute order, single or double quotes
+    // Match any <source> tag regardless of type, capture both src and type
     const sourceMatch =
-      html.match(/<source[^>]+src=["']([^"']+)["'][^>]*type=["']video\/mp4["']/i) ||
-      html.match(/<source[^>]+type=["']video\/mp4["'][^>]*src=["']([^"']+)["']/i);
+      html.match(/<source[^>]+src=["']([^"']+)["'][^>]*type=["']([^"']+)["']/i) ||
+      html.match(/<source[^>]+type=["']([^"']+)["'][^>]*src=["']([^"']+)["']/i);
 
     if (!sourceMatch) throw new Error("Video source not found");
 
-    let srcAttr = sourceMatch[1];
+    // Attribute order differs between the two regex branches — normalise
+    let srcAttr, mimeType;
+    if (/^https?:\/\/|^\//.test(sourceMatch[1])) {
+      // First branch: src first, type second
+      srcAttr = sourceMatch[1];
+      mimeType = sourceMatch[2];
+    } else {
+      // Second branch: type first, src second
+      mimeType = sourceMatch[1];
+      srcAttr = sourceMatch[2];
+    }
 
     // Resolve relative paths
     if (srcAttr.startsWith("/")) {
@@ -113,6 +123,12 @@ class Provider {
 
     // Normalize /proxy?url= → /proxy/?url=
     srcAttr = srcAttr.replace(/\/proxy\?url=/, "/proxy/?url=");
+
+    // Determine stream type from MIME type
+    const isHls =
+      /mpegURL|mpegurl|x-mpegURL|vnd\.apple\.mpegurl/i.test(mimeType) ||
+      srcAttr.includes(".m3u8");
+    const streamType = isHls ? "m3u8" : "mp4";
 
     return {
       server: "AnimeUnity",
@@ -124,7 +140,7 @@ class Provider {
         {
           url: srcAttr,
           quality: "auto",
-          type: "mp4",
+          type: streamType,
           subtitles: [],
         },
       ],
