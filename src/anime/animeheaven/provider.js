@@ -1,5 +1,4 @@
 /// <reference path="./online-streaming-provider.d.ts" />
-
 class Provider {
   constructor() {
     this.base = "https://animeheaven.me";
@@ -15,16 +14,13 @@ class Provider {
   async search(query) {
     const res = await fetch(`${this.base}/search.php?s=${encodeURIComponent(query.query)}`);
     const html = await res.text();
-
     const regex = /<div class='similarimg'>.*?<a href='(anime\.php\?.*?)'><img.*?alt='(.*?)'/gs;
     const results = [];
     let match;
-
     while ((match = regex.exec(html)) !== null) {
       const url = `${this.base}/${match[1]}`;
       const title = match[2].replace(/&#039;/g, "'");
       const id = match[1].replace("anime.php?", "");
-
       results.push({
         id,
         title,
@@ -32,7 +28,6 @@ class Provider {
         subOrDub: "sub",
       });
     }
-
     if (!results.length) throw new Error("No anime found");
     return results;
   }
@@ -41,15 +36,13 @@ class Provider {
     const res = await fetch(`${this.base}/anime.php?${id}`);
     const html = await res.text();
 
-    // Match the id attribute on each episode link
-    const regex = /onclick='gatea\("([a-f0-9]+)"\)'[^>]*id="[a-f0-9]+"[^>]*href='gate\.php'[\s\S]*?<div class=' watch2 bc'>(\d+)<\/div>/g;
+    // Match gatea("HASH") and capture the episode number from the following watch2 div
+    const regex = /onclick='gatea\("([a-f0-9]+)"\)'[\s\S]*?<div class='watch2 bc\s*'>(\d+)<\/div>/g;
     const episodes = [];
     let match;
-
     while ((match = regex.exec(html)) !== null) {
       const gateKey = match[1];
-      const number = parseInt(match[2]);
-
+      const number = parseInt(match[2], 10);
       episodes.push({
         id: gateKey,
         title: `Episode ${number}`,
@@ -60,14 +53,12 @@ class Provider {
 
     // Sort ascending since the page lists newest first
     episodes.sort((a, b) => a.number - b.number);
-
     return episodes;
   }
 
   async findEpisodeServer(episode, _server) {
     const gateKey = episode.id;
     const animeReferer = `${this.base}/anime.php`;
-
     const res = await fetch(`${this.base}/gate.php`, {
       headers: {
         "Cookie": `key=${gateKey}`,
@@ -78,7 +69,6 @@ class Provider {
 
     // Try to grab the full video URL from a <source> tag
     let videoUrl = null;
-
     const sourceMatch = html.match(/<source[^>]+src=['"]([^'"]+\.mp4[^'"]*)['"]/i);
     if (sourceMatch) {
       videoUrl = sourceMatch[1];
@@ -90,7 +80,7 @@ class Provider {
       if (dlMatch) videoUrl = dlMatch[1];
     }
 
-    // Fallback: reconstruct from known pattern using the second token in the page
+    // Fallback: reconstruct from known pattern using tokens in the page
     if (!videoUrl) {
       const tokenMatch = html.match(/video\.mp4\?([a-f0-9]+)&([a-f0-9]+)/);
       if (tokenMatch) {
