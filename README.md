@@ -78,7 +78,7 @@ https://raw.githubusercontent.com/pal-droid/seanime-providers/main/src/manga/man
 
 or
 
-[Click here](https://pal-droid.github.io/Seanime-Providers/) to visit the extensions Marketplace
+[Click here](https://seanime-contributions.github.io/Seanime-Providers/) to visit the extensions Marketplace
 
 ---
 
