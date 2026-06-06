@@ -3,7 +3,7 @@
   "name": "AniDB",
   "description": "AniDB is an online streaming provider for subbed & dubbed anime in english",
   "manifestURI": "https://raw.githubusercontent.com/Pal-droid/Seanime-Providers/main/src/anime/anidb/manifest.json",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Pal",
   "type": "onlinestream-provider",
   "language": "javascript",
