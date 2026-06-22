@@ -1,7 +1,7 @@
 class Provider {
   constructor() {
     this.api = "https://asurascans.com";
-    this.SLUG_SUFFIX = "f6174291"; // constant suffix used in all comic URLs
+    this.SLUG_SUFFIX = "fc4c7eba"; // constant suffix used in all comic URLs
   }
 
   getSettings() {
