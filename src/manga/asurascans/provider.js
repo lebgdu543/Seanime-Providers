@@ -1,7 +1,6 @@
 class Provider {
   constructor() {
     this.api = "https://asurascans.com";
-    this.SLUG_SUFFIX = "fc4c7eba"; // constant suffix used in all comic URLs
   }
 
   getSettings() {
@@ -46,13 +45,15 @@ class Provider {
         const slug = this._astroVal(s["slug"]);
         const title = this._astroVal(s["title"]);
         const cover = this._astroVal(s["cover"]);
+        const publicUrl = this._astroVal(s["public_url"]);
 
         if (!slug) continue;
 
         mangas.push({
-          id: slug,
+          id: publicUrl || `/comics/${slug}`, // Use public_url as ID
           title: title || slug,
           image: cover || "",
+          slug: slug, // Keep slug as backup
         });
       }
 
@@ -64,9 +65,8 @@ class Provider {
   }
 
   async findChapters(mangaId) {
-    // mangaId is the slug e.g. "solo-leveling-ragnarok"
-    // Comic page URL is always: /comics/{slug}-{SLUG_SUFFIX}
-    const comicUrl = `${this.api}/comics/${mangaId}-${this.SLUG_SUFFIX}`;
+    // mangaId is now the full public_url like "/comics/emperor-of-solo-play-fc4c7eba"
+    const comicUrl = `${this.api}${mangaId}`;
     try {
       const response = await this.fetchWithHeaders(comicUrl);
       if (!response.ok) return [];
