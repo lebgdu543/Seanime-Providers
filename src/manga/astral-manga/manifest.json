@@ -1,24 +1,14 @@
 {
     "id": "astral-manga",
-    "name": "Astral Manga",
-    "description": "French manga/manhwa scanlation provider for Astral-Manga.fr (Next.js RSC-based)",
-    "type": "manga",
+    "name": "Astral-Manga",
+    "description": "French manga/manhwa scanlation provider for Astral-Manga.fr. Parses Next.js RSC self.__next_f.push chunks from HTML.",
     "version": "1.0.0",
-    "author": {
-        "name": "lebgdu543",
-        "url": "https://github.com/lebgdu543"
-    },
+    "type": "manga",
+    "author": "lebgdu543",
     "language": "fr",
     "website": "https://astral-manga.fr",
     "icon": "https://astral-manga.fr/favicon.ico",
     "manifestURI": "https://raw.githubusercontent.com/lebgdu543/Seanime-Providers/main/src/manga/astral-manga/manifest.json",
     "payloadURI": "https://raw.githubusercontent.com/lebgdu543/Seanime-Providers/main/src/manga/astral-manga/provider.js",
-    "permissions": [
-        "https://astral-manga.fr/*"
-    ],
-    "capabilities": [
-        "search",
-        "chapters",
-        "pages"
-    ]
+    "tags": ["french", "manga", "manhwa", "scanlation"]
 }
