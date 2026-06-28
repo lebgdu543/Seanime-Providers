@@ -1,29 +1,29 @@
+/// <reference path="./manga-provider.d.ts" />
+
 /**
- * Seanime Extension for Astral Manga (astral-manga.fr)
+ * Seanime Manga Provider for Astral-Manga.fr
  *
- * Astral Manga uses Next.js App Router with React Server Components (RSC).
- * All data comes from the RSC wire format (text/x-component), NOT HTML scraping.
+ * Site: French manga/manhwa scanlation (Next.js App Router)
  *
- * URL patterns:
- *   Manga:   https://astral-manga.fr/manga/{urlId}
- *   Chapter: https://astral-manga.fr/manga/{urlId}/chapter/{chapterId}
+ * URL structure:
+ *   Manga:   /manga/{mangaUuid}
+ *   Chapter: /manga/{mangaUuid}/chapter/{chapterUuid}
+ *   Images:  /api/s3/presign-get?key=...
  *
- * The RSC payload is a multiline JSON format where each line is "key:value".
- * We walk the React element tree to find chapter images and manga metadata.
+ * The site serves Next.js RSC data embedded in self.__next_f.push([1,"..."]) 
+ * chunks within the HTML <script> tags. We parse those to extract manga metadata
+ * and chapter data. RSC-only requests (?_rsc=..., RSC: 1 header) return 403.
  *
- * IMPORTANT: Chapter IDs are composite — "urlId/chapterId" — because the
- * Astral URL scheme requires both the manga urlId and the chapter UUID.
- * findChapters encodes them; findChapterPages decodes them.
+ * Chapter IDs are encoded as "mangaUuid|chapterUuid" so findChapterPages
+ * can reconstruct the URL without an extra lookup.
  */
+
 class Provider {
+    api;
 
     constructor() {
-        this.api = "https://astral-manga.fr";
+        this.api = 'https://astral-manga.fr';
     }
-
-    api = "";
-
-    // ─── settings ────────────────────────────────────────────────
 
     getSettings() {
         return {
@@ -32,280 +32,311 @@ class Provider {
         };
     }
 
-    // ─── RSC helpers ─────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    //  Helpers
+    // ═══════════════════════════════════════════════════════════
 
-    /**
-     * Fetch a Next.js page as RSC payload.
-     * The "RSC: 1" header tells Next.js to return text/x-component.
-     */
-    async fetchRsc(path) {
-        const url = this.api + path;
-        const resp = await fetch(url, {
-            headers: {
-                "RSC": "1",
-                "User-Agent":
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "text/x-component",
-            },
-        });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await resp.text();
+    /** Resolve an S3 key (s3:uploads/...) or direct path to a presigned URL */
+    resolveImage(s3Key) {
+        const raw = s3Key.replace(/^s3:/, '');
+        return `${this.api}/api/s3/presign-get?key=${encodeURIComponent(raw)}`;
     }
 
     /**
-     * Parse the RSC wire format into a flat key→value object.
-     * Each line:  "0:{\"b\":\"...\",\"f\":[...]}"
-     *             "4:[\"$\",\"main\",null,{...}]"
+     * Parse React Server Components wire format from HTML.
+     *
+     * The HTML contains scripts like:
+     *   self.__next_f.push([1,"...escaped JSON string..."])
+     *
+     * We concatenate all chunks, unescape, and walk the resulting tree
+     * to find manga/chapter data.
      */
-    parseRsc(text) {
-        const lines = text.split("\n");
-        const data = {};
-        for (const line of lines) {
-            const idx = line.indexOf(":");
-            if (idx === -1) continue;
-            const key = line.substring(0, idx);
-            const raw = line.substring(idx + 1);
-            if (!raw) continue;
-            try {
-                data[key] = JSON.parse(raw);
-            } catch (_) {
-                // "$Sreact.fragment", "I[123,...]" etc. — skip
-            }
+    parseRSC(text) {
+        // Extract all __next_f.push([1,"..."]) chunks
+        const pushRegex = /self\.__next_f\.push\(\[1,"([\s\S]*?)"\]\)/g;
+        let combined = '';
+        let m;
+        while ((m = pushRegex.exec(text)) !== null) {
+            combined += m[1]
+                .replace(/\\"/g, '"')    // unescape double quotes
+                .replace(/\\\\/g, '\\')  // unescape backslashes
+                .replace(/\\n/g, '')     // strip newline escapes
+                .replace(/\\t/g, '');    // strip tab escapes
         }
-        return data;
-    }
 
-    /**
-     * Deep-walk an object tree. Returns the first value matching predicate.
-     */
-    walkTree(obj, predicate) {
-        if (obj === null || obj === undefined || typeof obj !== "object")
-            return null;
-        if (predicate(obj)) return obj;
-        if (Array.isArray(obj)) {
-            for (const item of obj) {
-                const r = this.walkTree(item, predicate);
-                if (r) return r;
-            }
-        } else {
-            for (const key of Object.keys(obj)) {
-                const r = this.walkTree(obj[key], predicate);
-                if (r) return r;
+        if (!combined) return null;
+
+        // Try parsing the combined string as JSON
+        try {
+            return JSON.parse(combined);
+        } catch {
+            // Fallback: try each chunk individually
+            const lines = combined.split('\n').filter(Boolean);
+            for (const line of lines) {
+                try {
+                    const obj = JSON.parse(line);
+                    // Check if this line encodes a React tree with manga data
+                    if (typeof obj === 'object' && obj !== null) {
+                        const found = this._findBySignature(obj);
+                        if (found) return found;
+                    }
+                } catch { /* continue */ }
             }
         }
+
         return null;
     }
 
     /**
-     * Find the chapter payload: an object with { chapter: { id, images: [...] } }.
+     * Walk a parsed object tree looking for objects that have
+     * the signature fields of manga or chapter data.
      */
-    findChapterPayload(rscData) {
-        return this.walkTree(
-            rscData,
-            (v) =>
-                v !== null &&
-                typeof v === "object" &&
-                !Array.isArray(v) &&
-                v.chapter !== undefined &&
-                v.chapter !== null &&
-                typeof v.chapter === "object" &&
-                typeof v.chapter.id === "string" &&
-                Array.isArray(v.chapter.images)
-        );
+    _findBySignature(node, type) {
+        if (!node || typeof node !== 'object') return null;
+
+        // Manga signature: has "title" AND "chapters" array
+        if (!type || type === 'manga') {
+            if (typeof node.title === 'string' && Array.isArray(node.chapters)) {
+                return { type: 'manga', data: node };
+            }
+        }
+
+        // Chapter signature: has "id" AND "images" array (but NOT "chapters")
+        if (!type || type === 'chapter') {
+            if (typeof node.id === 'string' && Array.isArray(node.images) && !Array.isArray(node.chapters)) {
+                return { type: 'chapter', data: node };
+            }
+        }
+
+        // Recurse
+        if (Array.isArray(node)) {
+            for (const item of node) {
+                const found = this._findBySignature(item, type);
+                if (found) return found;
+            }
+        } else if (typeof node === 'object') {
+            for (const key of Object.keys(node)) {
+                if (key === '__proto__' || key === 'constructor') continue;
+                const found = this._findBySignature(node[key], type);
+                if (found) return found;
+            }
+        }
+
+        return null;
     }
 
-    /**
-     * Find the manga payload: an object with { manga: { id, chapters: [...] } }.
-     */
-    findMangaPayload(rscData) {
-        return this.walkTree(
-            rscData,
-            (v) =>
-                v !== null &&
-                typeof v === "object" &&
-                !Array.isArray(v) &&
-                v.manga !== undefined &&
-                v.manga !== null &&
-                typeof v.manga === "object" &&
-                typeof v.manga.id === "string" &&
-                Array.isArray(v.manga.chapters)
-        );
+    /** Fetch the manga page HTML and extract RSC data */
+    async fetchMangaData(mangaId) {
+        const url = `${this.api}/manga/${mangaId}`;
+
+        const res = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+            },
+        });
+
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status} for ${mangaId}`);
+        }
+
+        const html = await res.text();
+        const parsed = this.parseRSC(html);
+
+        if (!parsed) {
+            throw new Error(`No RSC data found in HTML for ${mangaId}`);
+        }
+
+        // If parseRSC returned the whole tree, search for manga data
+        const manga = this._findBySignature(parsed, 'manga');
+        if (manga) return manga.data;
+
+        // If parsed result itself is the manga object
+        if (parsed.title && Array.isArray(parsed.chapters)) {
+            return parsed;
+        }
+
+        throw new Error(`No manga data found in RSC for ${mangaId}`);
     }
 
-    // ─── provider interface ──────────────────────────────────────
+    /** Fetch chapter page HTML and extract image data */
+    async fetchChapterData(mangaId, chapterId) {
+        const url = `${this.api}/manga/${mangaId}/chapter/${chapterId}`;
+
+        const res = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+            },
+        });
+
+        if (!res.ok) return null;
+
+        const html = await res.text();
+
+        // Strategy 1: Extract S3 keys from the HTML with regex
+        const s3KeyRegex = /s3:uploads\/projects\/[a-f0-9-]{36}\/chapters\/[a-f0-9-]{36}\/[^"'\s,}\]]+/g;
+        const s3Keys = html.match(s3KeyRegex);
+        if (s3Keys && s3Keys.length > 0) {
+            // Filter cover thumbnails, keep page images
+            const pageKeys = s3Keys.filter(k => !k.includes('/cover') && !k.includes('cover-'));
+            return (pageKeys.length > 0 ? pageKeys : s3Keys);
+        }
+
+        // Strategy 2: Parse RSC and find chapter object with images array
+        const parsed = this.parseRSC(html);
+        if (parsed) {
+            const chapter = this._findBySignature(parsed, 'chapter');
+            if (chapter?.data?.images) {
+                return chapter.data.images.map(img => {
+                    if (typeof img === 'string') return img;
+                    // Image objects: { link: "s3:...", key: "...", url: "..." }
+                    return img.link || img.key || img.url || img;
+                });
+            }
+        }
+
+        return null;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    //  Provider Interface
+    // ═══════════════════════════════════════════════════════════
 
     /**
      * Search for manga by title.
      *
-     * Tries Astral's search endpoint. Because Seanime already uses AniList for
-     * discovery, this just needs to return enough for the user to map entries.
-     * Falls back to an empty array if search is unavailable.
+     * Fetches the search page HTML and extracts manga links.
+     * If the search returns an exact match, we get the full manga data.
      */
     async search(opts) {
-        const query = (opts.query || "").trim();
-        if (!query) return [];
+        const q = (opts.query || '').trim();
+        if (!q) return [];
 
-        // Astral may serve RSC from /search?q=... with the RSC header
-        const url = `${this.api}/search?q=${encodeURIComponent(query)}`;
+        const searchUrl = `${this.api}/search?q=${encodeURIComponent(q)}`;
 
         try {
-            const resp = await fetch(url, {
+            const res = await fetch(searchUrl, {
                 headers: {
-                    "RSC": "1",
-                    "User-Agent":
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Accept": "text/x-component",
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
                 },
             });
 
-            if (!resp.ok) return [];
+            if (!res.ok) return [];
 
-            const text = await resp.text();
-            const data = this.parseRsc(text);
+            const html = await res.text();
 
+            // Try RSC parsing first (for exact matches where search redirects to manga page)
+            const parsed = this.parseRSC(html);
+            if (parsed) {
+                const manga = this._findBySignature(parsed, 'manga');
+                if (manga?.data) {
+                    const d = manga.data;
+                    return [{
+                        id: d.id || '',
+                        title: d.title || '',
+                        image: d.cover?.image?.link
+                            ? this.resolveImage(d.cover.image.link)
+                            : (d.image ? this.resolveImage(d.image) : undefined),
+                    }];
+                }
+                // Check if parsed itself is manga
+                if (parsed.title && Array.isArray(parsed.chapters)) {
+                    return [{
+                        id: parsed.id || '',
+                        title: parsed.title,
+                        image: parsed.cover?.image?.link
+                            ? this.resolveImage(parsed.cover.image.link)
+                            : undefined,
+                    }];
+                }
+            }
+
+            // Fallback: extract manga links from search results HTML
+            const linkRegex = /\/manga\/([a-f0-9-]{36})[^"]*"[^>]*>([^<]+)</gi;
             const results = [];
             const seen = new Set();
-
-            // Walk the tree looking for objects with id+title (manga cards)
-            const scan = (obj) => {
-                if (!obj || typeof obj !== "object") return;
-                if (Array.isArray(obj)) {
-                    for (const item of obj) scan(item);
-                } else if (typeof obj.id === "string" && typeof obj.title === "string" && obj.id.length > 20) {
-                    // Looks like a manga entry (UUID id + title)
-                    if (!seen.has(obj.id)) {
-                        seen.add(obj.id);
-                        results.push({
-                            id: obj.urlId || obj.id,
-                            title: obj.title,
-                            synonyms: undefined,
-                            year: obj.publishDate
-                                ? new Date(obj.publishDate).getFullYear()
-                                : undefined,
-                            image: this.resolveImage(obj.cover || obj.coverId),
-                        });
-                    }
+            let match;
+            while ((match = linkRegex.exec(html)) !== null) {
+                const id = match[1];
+                const title = match[2].trim();
+                if (!seen.has(id) && title.length > 1) {
+                    seen.add(id);
+                    results.push({ id, title });
                 }
-                // Continue deep-scanning
-                for (const key of Object.keys(obj)) {
-                    scan(obj[key]);
-                }
-            };
-            scan(data);
-
+            }
             return results;
-        } catch (_) {
+        } catch (e) {
+            console.error('search error:', e);
             return [];
         }
     }
 
     /**
-     * Fetch all chapters for a manga.
+     * Get all chapters for a manga.
      *
-     * Returns chapters with composite IDs ("urlId/chapterId") so that
-     * findChapterPages can reconstruct the full URL.
+     * Chapters are extracted from the manga page RSC data.
+     * Chapter IDs are encoded as "mangaUuid|chapterUuid" so that
+     * findChapterPages can reconstruct the URL directly.
      */
     async findChapters(mangaId) {
         try {
-            const text = await this.fetchRsc(`/manga/${mangaId}`);
-            const data = this.parseRsc(text);
+            const data = await this.fetchMangaData(mangaId);
+            const chapters = data.chapters || [];
 
-            const payload = this.findMangaPayload(data);
-            if (!payload || !payload.manga) return [];
+            // Sort by orderId descending (newest first)
+            const sorted = [...chapters].sort((a, b) => (b.orderId || 0) - (a.orderId || 0));
 
-            const manga = payload.manga;
-            const urlId = manga.urlId || mangaId;
+            return sorted.map((ch, index) => {
+                const num = ch.orderId?.toString() || '0';
+                let title = `Chapitre ${num}`;
+                if (ch.name && ch.name.trim()) title = ch.name.trim();
 
-            // Filter out season markers, only keep actual chapters
-            const chapters = (manga.chapters || [])
-                .filter((ch) => {
-                    if (!ch.id) return false;
-                    const name = (ch.name || "").toLowerCase();
-                    if (name.includes("saison") || name.includes("fin")) return false;
-                    return true;
-                })
-                .map((ch) => ({
-                    // Composite ID so findChapterPages can build the URL
-                    id: urlId + "/" + ch.id,
-                    url: `${this.api}/manga/${urlId}/chapter/${ch.id}`,
-                    title: ch.name || `Chapitre ${ch.orderId ?? "?"}`,
-                    chapter: String(ch.orderId ?? "?"),
-                    index: 0,
-                }));
-
-            // Sort by orderId ascending (chapter 1 first)
-            chapters.sort(
-                (a, b) => parseFloat(a.chapter) - parseFloat(b.chapter)
-            );
-            chapters.forEach((c, i) => (c.index = i));
-
-            return chapters;
+                return {
+                    id: `${mangaId}|${ch.id}`,
+                    url: `${this.api}/manga/${mangaId}/chapter/${ch.id}`,
+                    title,
+                    chapter: num,
+                    index,
+                };
+            });
         } catch (e) {
-            console.error("[AstralManga] findChapters error:", e);
+            console.error('findChapters error:', e);
             return [];
         }
     }
 
     /**
-     * Fetch all page images for a chapter.
+     * Get all page images for a chapter.
      *
-     * The chapterId is a composite "urlId/chapterUUID" encoded by findChapters.
+     * chapterId is the composite "mangaUuid|chapterUuid" from findChapters.
      */
     async findChapterPages(chapterId) {
-        try {
-            // Decode composite ID
-            const slashIdx = chapterId.indexOf("/");
-            if (slashIdx === -1) {
-                console.error(
-                    "[AstralManga] Invalid chapter ID (expected urlId/chapterUUID):",
-                    chapterId
-                );
-                return [];
-            }
-
-            const urlId = chapterId.substring(0, slashIdx);
-            const realChapterId = chapterId.substring(slashIdx + 1);
-
-            const path = `/manga/${urlId}/chapter/${realChapterId}`;
-            const text = await this.fetchRsc(path);
-            const data = this.parseRsc(text);
-
-            const payload = this.findChapterPayload(data);
-            if (!payload || !payload.chapter) return [];
-
-            const images = payload.chapter.images || [];
-
-            return images
-                .sort((a, b) => (a.orderId ?? 0) - (b.orderId ?? 0))
-                .map((img, i) => ({
-                    url: img.link,
-                    index: i,
-                    headers: {
-                        Referer: this.api,
-                    },
-                }));
-        } catch (e) {
-            console.error("[AstralManga] findChapterPages error:", e);
+        const parts = (chapterId || '').split('|');
+        if (parts.length < 2) {
+            console.error('Invalid chapterId format, expected "mangaUuid|chapterUuid", got:', chapterId);
             return [];
         }
-    }
+        const mangaUuid = parts[0];
+        const chapterUuid = parts[1];
+        const chapterUrl = `${this.api}/manga/${mangaUuid}/chapter/${chapterUuid}`;
 
-    // ─── utility ─────────────────────────────────────────────────
+        try {
+            const keys = await this.fetchChapterData(mangaUuid, chapterUuid);
+            if (!keys || keys.length === 0) return [];
 
-    /**
-     * Resolve various image reference formats to a usable URL.
-     *   "s3:uploads/projects/..."   → wasabi CDN URL
-     *   "https://..."               → as-is
-     *   "ada8be71-..." (coverId)    → (can't resolve without project UUID)
-     */
-    resolveImage(ref) {
-        if (!ref) return undefined;
-        if (ref.startsWith("http")) return ref;
-        if (ref.startsWith("s3:")) {
-            const path = ref.substring(3);
-            return `https://s3.eu-west-2.wasabisys.com/astral-bucket/${path}`;
+            return keys.map((key, i) => ({
+                url: this.resolveImage(key),
+                index: i,
+                headers: { Referer: chapterUrl },
+            }));
+        } catch (e) {
+            console.error('findChapterPages error:', e);
+            return [];
         }
-        // Bare ID — can't resolve to a URL; Seanime will show placeholder
-        return undefined;
     }
 }
